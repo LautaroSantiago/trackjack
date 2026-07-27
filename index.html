@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>TrackJack</title>
+<style>
+  body { margin:0; background:#111; display:flex; justify-content:center; align-items:center; height:100vh; font-family: monospace; }
+  canvas { image-rendering: pixelated; border: 4px solid #444; background:#5c94fc; }
+  #hud { position:fixed; top:10px; left:10px; color:#fff; font-size:20px; text-shadow:2px 2px #000; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="300"></canvas>
+<script>
+// canvas y contexto: dibujamos todo a mano con rectangulos, no usamos sprites externos
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false; // sin esto el navegador suaviza los bordes y se pierde el look 8-bits
+
+const GROUND_Y = 240; // linea del piso, todo lo que este parado tiene su base ahi
+
+// estado del jugador: x fijo (el mundo se mueve, no el personaje), y variable por el salto
+const player = {
+  x: 80, y: GROUND_Y - 30, w: 26, h: 30,
+  vy: 0, ducking: false, onGround: true
+};
+
+const GRAVITY = 1400;      // px/s^2, controla que tan rapido cae despues de saltar
+const JUMP_FORCE = -560;   // velocidad inicial hacia arriba al saltar (negativo = sube)
+
+let obstacles = [];
+let speed = 260;           // px/s, velocidad con la que el mundo se desplaza hacia la izquierda
+let distance = 0;
+let gameOver = false;
+let lastTime = 0;
+let spawnTimer = 0;
+
+// localStorage persiste datos en el navegador entre sesiones, ej: cerras la pestana y el record sigue ahi
+let best = parseInt(localStorage.getItem('trackjack_best') || '0', 10);
+
+// genera un obstaculo nuevo: tren alto (saltar) o barrera baja (agachar)
+function spawnObstacle() {
+  const isTrain = Math.random() < 0.55;
+  if (isTrain) {
+    obstacles.push({ x: cv.width, y: GROUND_Y - 46, w: 40, h: 46, type: 'train' });
+  } else {
+    obstacles.push({ x: cv.width, y: GROUND_Y - 14, w: 34, h: 14, type: 'bar' });
+  }
+}
+
+function reset() {
+  obstacles = [];
+  speed = 260;
+  distance = 0;
+  gameOver = false;
+  player.y = GROUND_Y - 30;
+  player.vy = 0;
+  player.ducking = false;
+  spawnTimer = 0;
+}
+
+// deteccion de colision por AABB (Axis Aligned Bounding Box): compara si dos rectangulos
+// se superponen comparando bordes, ej: si el borde derecho de A pasa el izquierdo de B y viceversa
+function aabb(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function update(dt) {
+  if (gameOver) return;
+
+  distance += speed * dt;
+  speed = 260 + distance * 0.02; // acelera de a poco segun la distancia recorrida
+
+  // fisica del salto: integracion simple de velocidad y posicion (euler)
+  player.vy += GRAVITY * dt;
+  player.y += player.vy * dt;
+  if (player.y >= GROUND_Y - 30) {
+    player.y = GROUND_Y - 30;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+
+  // hitbox del jugador cambia si esta agachado (mas bajo y mas corto)
+  player.h = player.ducking && player.onGround ? 16 : 30;
+  const py = player.ducking && player.onGround ? GROUND_Y - 16 : player.y;
+
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnObstacle();
+    spawnTimer = 1.1 + Math.random() * 0.9; // tiempo variable para que no sea predecible
+  }
+
+  for (const o of obstacles) {
+    o.x -= speed * dt;
+    const playerBox = { x: player.x, y: py, w: player.w, h: player.h };
+    if (aabb(playerBox, o)) {
+      gameOver = true;
+      const score = Math.floor(distance / 10);
+      if (score > best) {
+        best = score;
+        localStorage.setItem('trackjack_best', String(best));
+      }
+    }
+  }
+  obstacles = obstacles.filter(o => o.x + o.w > 0);
+}
+
+function drawPixelSkater() {
+  const y = player.ducking && player.onGround ? GROUND_Y - 16 : player.y;
+  const h = player.ducking && player.onGround ? 16 : 30;
+  ctx.fillStyle = '#e63946';
+  ctx.fillRect(player.x, y, player.w, h - 10); // torso
+  ctx.fillStyle = '#f1c27d';
+  ctx.fillRect(player.x + 6, y - 6, 14, 10); // cabeza
+  ctx.fillStyle = '#333';
+  ctx.fillRect(player.x - 2, y + h - 6, player.w + 4, 6); // patineta (tabla)
+  ctx.fillStyle = '#000';
+  ctx.fillRect(player.x + 2, y + h - 2, 6, 6);  // rueda trasera
+  ctx.fillRect(player.x + player.w - 8, y + h - 2, 6, 6); // rueda delantera
+}
+
+function draw() {
+  ctx.fillStyle = '#5c94fc';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+
+  // piso a rayas para dar sensacion de movimiento
+  ctx.fillStyle = '#8b5a2b';
+  ctx.fillRect(0, GROUND_Y, cv.width, cv.height - GROUND_Y);
+  ctx.fillStyle = '#6e4423';
+  const offset = Math.floor(distance) % 40;
+  for (let x = -offset; x < cv.width; x += 40) {
+    ctx.fillRect(x, GROUND_Y, 20, 6);
+  }
+
+  for (const o of obstacles) {
+    ctx.fillStyle = o.type === 'train' ? '#264653' : '#e9c46a';
+    ctx.fillRect(o.x, o.y, o.w, o.h);
+  }
+
+  drawPixelSkater();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '16px monospace';
+  ctx.fillText('Puntos: ' + Math.floor(distance / 10), 10, 20);
+  ctx.fillText('Record: ' + best, 10, 42);
+
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#fff';
+    ctx.font = '28px monospace';
+    ctx.fillText('GAME OVER', cv.width/2 - 90, cv.height/2 - 10);
+    ctx.font = '16px monospace';
+    ctx.fillText('Presiona ESPACIO para reiniciar', cv.width/2 - 130, cv.height/2 + 20);
+  }
+}
+
+function loop(t) {
+  const dt = Math.min((t - lastTime) / 1000, 0.033); // clamp del dt para evitar saltos raros si la pestana pierde foco
+  lastTime = t;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    if (gameOver) { reset(); return; }
+    if (player.onGround && !player.ducking) {
+      player.vy = JUMP_FORCE;
+    }
+  }
+  if (e.code === 'ArrowDown') {
+    player.ducking = true;
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'ArrowDown') player.ducking = false;
+});
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
