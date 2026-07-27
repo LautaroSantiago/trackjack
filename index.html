@@ -35,7 +35,7 @@ let gameOver = false;
 let lastTime = 0;
 let spawnTimer = 0;
 let dayTime = 0;
-const CYCLE_LEN = 45;
+const CYCLE_LEN = 110; // ciclo de dia/noche mas lento que antes, dura casi 2 minutos
 
 let best = parseInt(localStorage.getItem('trackjack_best') || '0', 10);
 
@@ -63,15 +63,28 @@ function skyColor(phase) {
   return SKY_KEYS[0].color;
 }
 
+// tren: bloquea desde el piso hasta bastante alto, solo se esquiva saltando
+// viga: cuelga arriba, solo se esquiva agachado (el hitbox de pie llega hasta la viga, agachado no)
+// enemigo: ademas de esquivarlo saltando, dispara una bola de fuego una vez que aparece en pantalla
 function spawnObstacle() {
   const r = Math.random();
-  if (r < 0.4) {
+  if (r < 0.35) {
     obstacles.push({ x: cv.width, y: GROUND_Y - 46, w: 40, h: 46, type: 'train' });
-  } else if (r < 0.7) {
-    obstacles.push({ x: cv.width, y: GROUND_Y - 14, w: 34, h: 14, type: 'bar' });
+  } else if (r < 0.65) {
+    obstacles.push({ x: cv.width, y: GROUND_Y - 50, w: 60, h: 24, type: 'bar' });
   } else {
-    obstacles.push({ x: cv.width, y: GROUND_Y - 28, w: 24, h: 28, type: 'enemy' });
+    obstacles.push({
+      x: cv.width, y: GROUND_Y - 28, w: 24, h: 28, type: 'enemy',
+      fired: false, fireTimer: 0.4 + Math.random() * 0.5
+    });
   }
+}
+
+// bola de fuego: mas rapida que el resto y aparece alta (agachar) o baja (saltar), segun el sorteo
+function spawnFireball(x, y) {
+  const high = Math.random() < 0.5;
+  const fy = high ? GROUND_Y - 90 : GROUND_Y - 14;
+  obstacles.push({ x, y: fy, w: 14, h: 14, type: 'fireball', speedMult: 1.6 });
 }
 
 function reset() {
@@ -88,6 +101,7 @@ function reset() {
   spawnTimer = 0;
 }
 
+// AABB (Axis Aligned Bounding Box): compara bordes de dos rectangulos para saber si se solapan
 function aabb(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
@@ -138,7 +152,16 @@ function update(dt) {
   }
 
   for (const o of obstacles) {
-    o.x -= speed * dt;
+    o.x -= speed * (o.speedMult || 1) * dt;
+
+    if (o.type === 'enemy' && !o.fired) {
+      o.fireTimer -= dt;
+      if (o.fireTimer <= 0 && o.x < cv.width - 20) {
+        o.fired = true;
+        spawnFireball(o.x, o.y);
+      }
+    }
+
     if (!player.invulnerable) {
       const playerBox = { x: player.x, y: py, w: player.w, h: player.h };
       if (aabb(playerBox, o)) loseLife();
@@ -172,6 +195,13 @@ function drawEnemy(o) {
   ctx.fillRect(o.x - 2, o.y + o.h - 4, o.w + 4, 4);
 }
 
+function drawFireball(o) {
+  ctx.fillStyle = '#f77f00';
+  ctx.fillRect(o.x, o.y, o.w, o.h);
+  ctx.fillStyle = '#fcbf49';
+  ctx.fillRect(o.x + 3, o.y + 3, o.w - 6, o.h - 6);
+}
+
 function draw() {
   const phase = dayTime / CYCLE_LEN;
   const sky = skyColor(phase);
@@ -199,6 +229,7 @@ function draw() {
 
   for (const o of obstacles) {
     if (o.type === 'enemy') { drawEnemy(o); continue; }
+    if (o.type === 'fireball') { drawFireball(o); continue; }
     ctx.fillStyle = o.type === 'train' ? '#264653' : '#e9c46a';
     ctx.fillRect(o.x, o.y, o.w, o.h);
   }

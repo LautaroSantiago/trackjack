@@ -15,14 +15,15 @@ Endless runner 8-bits en HTML5 Canvas puro, sin frameworks ni dependencias.
 
 ## Sobre el proyecto
 
-Un personaje en patineta esquiva trenes, barreras y enemigos mientras el dia avanza hacia la noche y vuelve a amanecer. Todo el juego corre en un unico archivo HTML, sin librerias externas ni motor grafico.
+Un personaje en patineta esquiva trenes, vigas, enemigos y bolas de fuego mientras el dia avanza hacia la noche y vuelve a amanecer. Todo el juego corre en un unico archivo HTML, sin librerias externas ni motor grafico.
 
 GitHub no ejecuta JavaScript dentro del README, asi que el juego se juega en la version publicada con GitHub Pages (boton de arriba).
 
 ## Funcionalidades
 
 - 3 vidas con invulnerabilidad temporal tras cada golpe
-- Enemigos ademas de trenes y barreras, cada uno con su propia hitbox
+- Enemigos que disparan bolas de fuego a distintas alturas
+- Trenes (saltar) y vigas altas (agachar), cada uno con su propia hitbox
 - Ciclo dinamico de dia, tarde y noche con cielo interpolado en tiempo real
 - Dificultad progresiva: la velocidad aumenta con la distancia recorrida
 - Record persistente guardado en el navegador (`localStorage`)
@@ -43,6 +44,7 @@ HTML5 Canvas + JavaScript vanilla. Sin React, sin librerias de fisica, sin build
 - Loop de juego con `requestAnimationFrame` y delta time, para que la velocidad no dependa del hardware.
 - Colisiones por AABB (bounding box): compara bordes de rectangulos para detectar choques.
 - El ciclo dia/noche interpola colores entre keyframes segun la fase del reloj interno del juego.
+- Los enemigos disparan una bola de fuego a altura aleatoria (alta o baja) una vez que entran en pantalla.
 - Obstaculos generados al azar con tiempo de espera variable entre spawns.
 
 ## Correr en local
